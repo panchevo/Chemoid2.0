@@ -1,9 +1,9 @@
 const CACHE_NAME = "chemoid-v2.0";
 const urlsToCache = [
-  "/Psychiatrist/",
-  "/Psychiatrist/index.html",
-  "/Psychiatrist/icon.png",
-  "/Psychiatrist/icon.png"
+  "/Chemoid2.0/",
+  "/Chemoid2.0/index.html",
+  "/Chemoid2.0/icon.png",
+  "/Chemoid2.0/icon.png"
 ];
 
 self.addEventListener("install", event => {
