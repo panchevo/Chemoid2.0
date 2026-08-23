@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Химоид — Android</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            background: #1e2b3c;
+            display: flex;
+            height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .table-panel {
+            width: 280px;
+            min-width: 200px;
+            background: #0f1a26;
+            padding: 8px 6px;
+            overflow-y: auto;
+            border-right: 2px solid #3a4c5e;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+        .table-panel h3 {
+            color: #b0d0e0;
+            text-align: center;
+            font-weight: 300;
+            letter-spacing: 1px;
+            font-size: 14px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #2a4050;
+            padding-bottom: 6px;
+        }
+        .periodic-grid {
+            display: grid;
+            grid-template-columns: repeat(18, 1fr);
+            gap: 1.5px;
+            background: #0f1a26;
+        }
+        .element-cell {
+            aspect-ratio: 1 / 1;
+            background: #1a2a38;
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 7px;
+            font-weight: 600;
+            color: #d4eaf5;
+            cursor: pointer;
+            transition: 0.1s;
+            box-shadow: 0 0 0 1px #2a4050;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+            line-height: 1;
+            padding: 1px;
+        }
+        .element-cell .el-number { font-size: 5px; color: #6a8a9a; font-weight: 400; }
+        .element-cell .el-symbol { font-size: 11px; font-weight: 700; color: #e6f3fa; }
+        .element-cell .el-name { font-size: 4.5px; color: #8aacbe; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        .element-cell:active { transform: scale(0.9); background: #2a4a5e; }
+
+        .element-cell.nonmetal { background: #1a3a2a; }
+        .element-cell.noble-gas { background: #2a2a4a; }
+        .element-cell.alkali { background: #3a2a2a; }
+        .element-cell.alkaline-earth { background: #3a2a3a; }
+        .element-cell.metalloid { background: #2a3a2a; }
+        .element-cell.halogen { background: #2a2a3a; }
+        .element-cell.transition { background: #1a2a3a; }
+        .element-cell.lanthanide { background: #2a1a3a; }
+        .element-cell.actinide { background: #2a1a2a; }
+        .element-cell.post-transition { background: #1a2a2a; }
+
+        .coefficient-panel {
+            margin-top: 8px;
+            padding: 6px 2px;
+            background: #0a1722;
+            border-radius: 6px;
+            border: 1px solid #1a3040;
+        }
+        .coefficient-panel .label {
+            color: #7a9aaa;
+            font-size: 10px;
+            text-align: center;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
+        }
+        .coefficient-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 3px;
+        }
+        .coeff-cell {
+            aspect-ratio: 1 / 1;
+            background: #1a2a38;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffd866;
+            cursor: pointer;
+            box-shadow: 0 0 0 1px #2a4050;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+        }
+        .coeff-cell:active { background: #2a4a5e; transform: scale(0.9); }
+
+        .workspace {
+            flex: 1;
+            background: #1b2a36;
+            position: relative;
+            overflow: hidden;
+            background-image: radial-gradient(circle at 20% 30%, #2a4050 1px, transparent 1px), radial-gradient(circle at 80% 70%, #2a4050 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: 0 0, 25px 25px;
+            touch-action: none;
+        }
+        .chem-object {
+            position: absolute;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #e6f3fa;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+            cursor: grab;
+            display: inline-block;
+            white-space: nowrap;
+            transition: filter 0.1s, transform 0.1s;
+            background: transparent;
+            border: none;
+            pointer-events: auto;
+            z-index: 20;
+            touch-action: none;
+        }
+        .chem-object.dragging {
+            cursor: grabbing;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.7));
+            z-index: 100;
+            transform: scale(1.08);
+        }
+        .chem-object.compound {
+            color: #ffd866;
+            font-size: 13px;
+            background: rgba(255, 216, 102, 0.08);
+            border: 1px solid rgba(255, 216, 102, 0.15);
+            padding: 3px 10px;
+        }
+        .chem-object.mega-compound {
+            color: #ff8a8a;
+            font-size: 12px;
+            background: rgba(255, 138, 138, 0.08);
+            border: 1px solid rgba(255, 138, 138, 0.15);
+            padding: 3px 10px;
+        }
+        .chem-object.alloy {
+            color: #80d0ff;
+            font-size: 13px;
+            background: rgba(128, 208, 255, 0.08);
+            border: 1px solid rgba(128, 208, 255, 0.15);
+            padding: 3px 10px;
+        }
+        .chem-object.reject {
+            color: #ff5555 !important;
+            background: rgba(255, 50, 50, 0.25) !important;
+            border: 1px solid #ff3333 !important;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        }
+        .chem-object.coefficient {
+            color: #ffd866;
+            font-size: 18px;
+            font-weight: 800;
+            background: rgba(255, 216, 102, 0.15);
+            border: 2px solid #ffd866;
+            padding: 2px 12px;
+            border-radius: 12px;
+            min-width: 36px;
+            text-align: center;
+            cursor: grab;
+            box-shadow: 0 0 20px rgba(255, 216, 102, 0.2);
+        }
+        .info-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0a1a22cc;
+            backdrop-filter: blur(6px);
+            color: #b0d0e0;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 12px;
+            border: 1px solid #2a5060;
+            pointer-events: none;
+            z-index: 200;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .info-bar span { color: #8fcbff; font-weight: 600; }
+        .info-bar .compound-count { color: #ffd866; }
+
+        .clear-btn {
+            background: #1a3040;
+            border: 1px solid #3a5a6e;
+            color: #b0d0e0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-top: 6px;
+            width: 100%;
+        }
+        .clear-btn:active { background: #2a4a5e; }
+        .stats-bar {
+            color: #5a7a8a;
+            font-size: 10px;
+            text-align: center;
+            padding: 4px 0;
+            border-top: 1px solid #1a3040;
+            margin-top: 4px;
+        }
+        .stats-bar span { color: #8fcbff; }
+
+        .table-panel::-webkit-scrollbar { width: 3px; }
+        .table-panel::-webkit-scrollbar-track { background: #0f1a26; }
+        .table-panel::-webkit-scrollbar-thumb { background: #3a5a6e; border-radius: 10px; }
+
+        @media (max-width: 600px) {
+            .table-panel { width: 200px; min-width: 140px; padding: 4px; }
+            .element-cell .el-symbol { font-size: 9px; }
+            .element-cell .el-name { display: none; }
+            .element-cell .el-number { font-size: 4px; }
+            .coefficient-panel .label { font-size: 8px; }
+            .coeff-cell { font-size: 11px; }
+            .chem-object { font-size: 13px; padding: 3px 8px; }
+            .chem-object.compound { font-size: 11px; }
+            .info-bar { font-size: 10px; padding: 4px 12px; }
+        }
+        @media (max-width: 400px) {
+            .table-panel { width: 160px; min-width: 120px; }
+            .element-cell .el-symbol { font-size: 7px; }
+            .periodic-grid { gap: 1px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="table-panel">
+        <h3>⚛️ ТАБЛИЦА</h3>
+        <div class="periodic-grid" id="periodicGrid"></div>
+        <div class="coefficient-panel">
+            <div class="label">📊 КОЭФФИЦИЕНТЫ</div>
+            <div class="coefficient-grid" id="coefficientGrid"></div>
+        </div>
+        <button class="clear-btn" id="clearBtn">🗑️ Очистить всё</button>
+        <div class="stats-bar">Соединений: <span id="compoundCount">0</span></div>
+        <div style="margin-top:4px; color:#5a7a8a; font-size:9px; text-align:center; border-top:1px solid #1a3040; padding-top:4px;">
+            <span style="color:#8fcbff;">касание</span> · создать<br>
+            <span style="color:#ffd866;">жёлтые</span> · сложные<br>
+            <span style="color:#80d0ff;">голубые</span> · сплавы<br>
+            <span style="color:#ff8a8a;">красные</span> · мега (6+)<br>
+            <span style="color:#ffd866;font-weight:bold;">коэф.</span> · перетащите
+        </div>
+    </div>
+    <div class="workspace" id="workspace">
+        <div class="info-bar">🧪 <span>ХИМОИД</span> · касайтесь элементов</div>
+    </div>
+
+    <script>
+        (function(){
+            // ---- ПОЛНЫЕ ДАННЫЕ ЭЛЕМЕНТОВ (сокращённо для мобильной версии) ----
+            const elementsData = [
+                { sym: "H", num: 1, name: "Водород", mass: "1.008", group: "Неметалл", type: "неметалл", state: "газ", color: "nonmetal", valence: 1, period: 1, groupNum: 1 },
+                { sym: "He", num: 2, name: "Гелий", mass: "4.003", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 1, groupNum: 18 },
+                { sym: "Li", num: 3, name: "Литий", mass: "6.941", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 2, groupNum: 1 },
+                { sym: "Be", num: 4, name: "Бериллий", mass: "9.012", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 2, groupNum: 2 },
+                { sym: "B", num: 5, name: "Бор", mass: "10.81", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 3, period: 2, groupNum: 13 },
+                { sym: "C", num: 6, name: "Углерод", mass: "12.011", group: "Неметалл", type: "неметалл", state: "твёрдое", color: "nonmetal", valence: 4, period: 2, groupNum: 14 },
+                { sym: "N", num: 7, name: "Азот", mass: "14.007", group: "Неметалл", type: "неметалл", state: "газ", color: "nonmetal", valence: 3, period: 2, groupNum: 15 },
+                { sym: "O", num: 8, name: "Кислород", mass: "15.999", group: "Неметалл", type: "неметалл", state: "газ", color: "nonmetal", valence: 2, period: 2, groupNum: 16 },
+                { sym: "F", num: 9, name: "Фтор", mass: "18.998", group: "Галоген", type: "галоген", state: "газ", color: "halogen", valence: 1, period: 2, groupNum: 17 },
+                { sym: "Ne", num: 10, name: "Неон", mass: "20.180", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 2, groupNum: 18 },
+                { sym: "Na", num: 11, name: "Натрий", mass: "22.990", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 3, groupNum: 1 },
+                { sym: "Mg", num: 12, name: "Магний", mass: "24.305", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 3, groupNum: 2 },
+                { sym: "Al", num: 13, name: "Алюминий", mass: "26.982", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 3, period: 3, groupNum: 13 },
+                { sym: "Si", num: 14, name: "Кремний", mass: "28.086", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 4, period: 3, groupNum: 14 },
+                { sym: "P", num: 15, name: "Фосфор", mass: "30.974", group: "Неметалл", type: "неметалл", state: "твёрдое", color: "nonmetal", valence: 3, period: 3, groupNum: 15 },
+                { sym: "S", num: 16, name: "Сера", mass: "32.065", group: "Неметалл", type: "неметалл", state: "твёрдое", color: "nonmetal", valence: 2, period: 3, groupNum: 16 },
+                { sym: "Cl", num: 17, name: "Хлор", mass: "35.453", group: "Галоген", type: "галоген", state: "газ", color: "halogen", valence: 1, period: 3, groupNum: 17 },
+                { sym: "Ar", num: 18, name: "Аргон", mass: "39.948", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 3, groupNum: 18 },
+                { sym: "K", num: 19, name: "Калий", mass: "39.098", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 4, groupNum: 1 },
+                { sym: "Ca", num: 20, name: "Кальций", mass: "40.078", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 4, groupNum: 2 },
+                { sym: "Sc", num: 21, name: "Скандий", mass: "44.956", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 4, groupNum: 3 },
+                { sym: "Ti", num: 22, name: "Титан", mass: "47.867", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 4, groupNum: 4 },
+                { sym: "V", num: 23, name: "Ванадий", mass: "50.942", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 5, period: 4, groupNum: 5 },
+                { sym: "Cr", num: 24, name: "Хром", mass: "51.996", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 4, groupNum: 6 },
+                { sym: "Mn", num: 25, name: "Марганец", mass: "54.938", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 4, groupNum: 7 },
+                { sym: "Fe", num: 26, name: "Железо", mass: "55.845", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 4, groupNum: 8 },
+                { sym: "Co", num: 27, name: "Кобальт", mass: "58.933", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 4, groupNum: 9 },
+                { sym: "Ni", num: 28, name: "Никель", mass: "58.693", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 4, groupNum: 10 },
+                { sym: "Cu", num: 29, name: "Медь", mass: "63.546", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 4, groupNum: 11 },
+                { sym: "Zn", num: 30, name: "Цинк", mass: "65.380", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 4, groupNum: 12 },
+                { sym: "Ga", num: 31, name: "Галлий", mass: "69.723", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 3, period: 4, groupNum: 13 },
+                { sym: "Ge", num: 32, name: "Германий", mass: "72.630", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 4, period: 4, groupNum: 14 },
+                { sym: "As", num: 33, name: "Мышьяк", mass: "74.922", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 3, period: 4, groupNum: 15 },
+                { sym: "Se", num: 34, name: "Селен", mass: "78.971", group: "Неметалл", type: "неметалл", state: "твёрдое", color: "nonmetal", valence: 2, period: 4, groupNum: 16 },
+                { sym: "Br", num: 35, name: "Бром", mass: "79.904", group: "Галоген", type: "галоген", state: "жидкое", color: "halogen", valence: 1, period: 4, groupNum: 17 },
+                { sym: "Kr", num: 36, name: "Криптон", mass: "83.798", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 4, groupNum: 18 },
+                { sym: "Rb", num: 37, name: "Рубидий", mass: "85.468", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 5, groupNum: 1 },
+                { sym: "Sr", num: 38, name: "Стронций", mass: "87.620", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 5, groupNum: 2 },
+                { sym: "Y", num: 39, name: "Иттрий", mass: "88.906", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 5, groupNum: 3 },
+                { sym: "Zr", num: 40, name: "Цирконий", mass: "91.224", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 5, groupNum: 4 },
+                { sym: "Nb", num: 41, name: "Ниобий", mass: "92.906", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 5, groupNum: 5 },
+                { sym: "Mo", num: 42, name: "Молибден", mass: "95.950", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 5, groupNum: 6 },
+                { sym: "Tc", num: 43, name: "Технеций", mass: "98.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 5, groupNum: 7 },
+                { sym: "Ru", num: 44, name: "Рутений", mass: "101.070", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 5, groupNum: 8 },
+                { sym: "Rh", num: 45, name: "Родий", mass: "102.906", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 5, groupNum: 9 },
+                { sym: "Pd", num: 46, name: "Палладий", mass: "106.420", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 5, groupNum: 10 },
+                { sym: "Ag", num: 47, name: "Серебро", mass: "107.868", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 1, period: 5, groupNum: 11 },
+                { sym: "Cd", num: 48, name: "Кадмий", mass: "112.414", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 5, groupNum: 12 },
+                { sym: "In", num: 49, name: "Индий", mass: "114.818", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 3, period: 5, groupNum: 13 },
+                { sym: "Sn", num: 50, name: "Олово", mass: "118.710", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 4, period: 5, groupNum: 14 },
+                { sym: "Sb", num: 51, name: "Сурьма", mass: "121.760", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 3, period: 5, groupNum: 15 },
+                { sym: "Te", num: 52, name: "Теллур", mass: "127.600", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 2, period: 5, groupNum: 16 },
+                { sym: "I", num: 53, name: "Иод", mass: "126.904", group: "Галоген", type: "галоген", state: "твёрдое", color: "halogen", valence: 1, period: 5, groupNum: 17 },
+                { sym: "Xe", num: 54, name: "Ксенон", mass: "131.293", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 5, groupNum: 18 },
+                { sym: "Cs", num: 55, name: "Цезий", mass: "132.905", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 6, groupNum: 1 },
+                { sym: "Ba", num: 56, name: "Барий", mass: "137.327", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 6, groupNum: 2 },
+                { sym: "La", num: 57, name: "Лантан", mass: "138.905", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 3 },
+                { sym: "Ce", num: 58, name: "Церий", mass: "140.116", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 4 },
+                { sym: "Pr", num: 59, name: "Празеодим", mass: "140.908", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 5 },
+                { sym: "Nd", num: 60, name: "Неодим", mass: "144.243", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 6 },
+                { sym: "Pm", num: 61, name: "Прометий", mass: "145.000", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 7 },
+                { sym: "Sm", num: 62, name: "Самарий", mass: "150.362", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 8 },
+                { sym: "Eu", num: 63, name: "Европий", mass: "151.964", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 9 },
+                { sym: "Gd", num: 64, name: "Гадолиний", mass: "157.250", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 10 },
+                { sym: "Tb", num: 65, name: "Тербий", mass: "158.925", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 11 },
+                { sym: "Dy", num: 66, name: "Диспрозий", mass: "162.500", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 12 },
+                { sym: "Ho", num: 67, name: "Гольмий", mass: "164.930", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 13 },
+                { sym: "Er", num: 68, name: "Эрбий", mass: "167.259", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 14 },
+                { sym: "Tm", num: 69, name: "Тулий", mass: "168.934", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 15 },
+                { sym: "Yb", num: 70, name: "Иттербий", mass: "173.045", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 16 },
+                { sym: "Lu", num: 71, name: "Лютеций", mass: "174.967", group: "Лантаноид", type: "металл", state: "твёрдое", color: "lanthanide", valence: 3, period: 6, groupNum: 17 },
+                { sym: "Hf", num: 72, name: "Гафний", mass: "178.490", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 6, groupNum: 4 },
+                { sym: "Ta", num: 73, name: "Тантал", mass: "180.948", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 5, period: 6, groupNum: 5 },
+                { sym: "W", num: 74, name: "Вольфрам", mass: "183.840", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 6, period: 6, groupNum: 6 },
+                { sym: "Re", num: 75, name: "Рений", mass: "186.207", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 5, period: 6, groupNum: 7 },
+                { sym: "Os", num: 76, name: "Осмий", mass: "190.230", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 6, groupNum: 8 },
+                { sym: "Ir", num: 77, name: "Иридий", mass: "192.217", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 6, groupNum: 9 },
+                { sym: "Pt", num: 78, name: "Платина", mass: "195.084", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 6, groupNum: 10 },
+                { sym: "Au", num: 79, name: "Золото", mass: "196.967", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 6, groupNum: 11 },
+                { sym: "Hg", num: 80, name: "Ртуть", mass: "200.592", group: "Переходный металл", type: "металл", state: "жидкое", color: "transition", valence: 2, period: 6, groupNum: 12 },
+                { sym: "Tl", num: 81, name: "Таллий", mass: "204.380", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 3, period: 6, groupNum: 13 },
+                { sym: "Pb", num: 82, name: "Свинец", mass: "207.200", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 4, period: 6, groupNum: 14 },
+                { sym: "Bi", num: 83, name: "Висмут", mass: "208.980", group: "Постпереходный металл", type: "металл", state: "твёрдое", color: "post-transition", valence: 3, period: 6, groupNum: 15 },
+                { sym: "Po", num: 84, name: "Полоний", mass: "209.000", group: "Металлоид", type: "металлоид", state: "твёрдое", color: "metalloid", valence: 4, period: 6, groupNum: 16 },
+                { sym: "At", num: 85, name: "Астат", mass: "210.000", group: "Галоген", type: "галоген", state: "твёрдое", color: "halogen", valence: 1, period: 6, groupNum: 17 },
+                { sym: "Rn", num: 86, name: "Радон", mass: "222.000", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 0, period: 6, groupNum: 18 },
+                { sym: "Fr", num: 87, name: "Франций", mass: "223.000", group: "Щелочной металл", type: "металл", state: "твёрдое", color: "alkali", valence: 1, period: 7, groupNum: 1 },
+                { sym: "Ra", num: 88, name: "Радий", mass: "226.000", group: "Щёлочноземельный", type: "металл", state: "твёрдое", color: "alkaline-earth", valence: 2, period: 7, groupNum: 2 },
+                { sym: "Ac", num: 89, name: "Актиний", mass: "227.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 3 },
+                { sym: "Th", num: 90, name: "Торий", mass: "232.038", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 4, period: 7, groupNum: 4 },
+                { sym: "Pa", num: 91, name: "Протактиний", mass: "231.036", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 5, period: 7, groupNum: 5 },
+                { sym: "U", num: 92, name: "Уран", mass: "238.029", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 6, period: 7, groupNum: 6 },
+                { sym: "Np", num: 93, name: "Нептуний", mass: "237.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 5, period: 7, groupNum: 7 },
+                { sym: "Pu", num: 94, name: "Плутоний", mass: "244.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 4, period: 7, groupNum: 8 },
+                { sym: "Am", num: 95, name: "Америций", mass: "243.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 9 },
+                { sym: "Cm", num: 96, name: "Кюрий", mass: "247.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 4, period: 7, groupNum: 10 },
+                { sym: "Bk", num: 97, name: "Берклий", mass: "247.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 11 },
+                { sym: "Cf", num: 98, name: "Калифорний", mass: "251.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 12 },
+                { sym: "Es", num: 99, name: "Эйнштейний", mass: "252.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 13 },
+                { sym: "Fm", num: 100, name: "Фермий", mass: "257.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 14 },
+                { sym: "Md", num: 101, name: "Менделевий", mass: "258.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 15 },
+                { sym: "No", num: 102, name: "Нобелий", mass: "259.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 16 },
+                { sym: "Lr", num: 103, name: "Лоуренсий", mass: "266.000", group: "Актиноид", type: "металл", state: "твёрдое", color: "actinide", valence: 3, period: 7, groupNum: 17 },
+                { sym: "Rf", num: 104, name: "Резерфордий", mass: "267.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 7, groupNum: 4 },
+                { sym: "Db", num: 105, name: "Дубний", mass: "268.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 5, period: 7, groupNum: 5 },
+                { sym: "Sg", num: 106, name: "Сиборгий", mass: "269.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 7, groupNum: 6 },
+                { sym: "Bh", num: 107, name: "Борий", mass: "270.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 7 },
+                { sym: "Hs", num: 108, name: "Хассий", mass: "277.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 7, groupNum: 8 },
+                { sym: "Mt", num: 109, name: "Мейтнерий", mass: "278.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 9 },
+                { sym: "Ds", num: 110, name: "Дармштадтий", mass: "281.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 10 },
+                { sym: "Rg", num: 111, name: "Рентгений", mass: "282.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 11 },
+                { sym: "Cn", num: 112, name: "Коперниций", mass: "285.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 2, period: 7, groupNum: 12 },
+                { sym: "Nh", num: 113, name: "Нихоний", mass: "286.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 13 },
+                { sym: "Fl", num: 114, name: "Флеровий", mass: "289.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 7, groupNum: 14 },
+                { sym: "Mc", num: 115, name: "Московий", mass: "290.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 3, period: 7, groupNum: 15 },
+                { sym: "Lv", num: 116, name: "Ливерморий", mass: "293.000", group: "Переходный металл", type: "металл", state: "твёрдое", color: "transition", valence: 4, period: 7, groupNum: 16 },
+                { sym: "Ts", num: 117, name: "Теннессин", mass: "294.000", group: "Галоген", type: "галоген", state: "твёрдое", color: "halogen", valence: 3, period: 7, groupNum: 17 },
+                { sym: "Og", num: 118, name: "Оганесон", mass: "294.000", group: "Благородный газ", type: "благородный газ", state: "газ", color: "noble-gas", valence: 2, period: 7, groupNum: 18 }
+            ];
+
+            const elementMap = {};
+            elementsData.forEach(el => elementMap[el.sym] = el);
+            const elementData = {};
+            elementsData.forEach(el => { elementData[el.sym] = { name: el.name, mass: el.mass, group: el.group, rus: el.name.toLowerCase(), state: el.state, type: el.type }; });
+            const valenceMap = {};
+            elementsData.forEach(el => valenceMap[el.sym] = el.valence);
+            const atomicNumbers = {};
+            elementsData.forEach(el => atomicNumbers[el.sym] = el.num);
+
+            function tokenize(comp) {
+                const tokens = []; let i = 0;
+                while (i < comp.length) {
+                    if (i+1 < comp.length && comp[i+1] >= 'a' && comp[i+1] <= 'z') { tokens.push(comp.substring(i, i+2)); i += 2; }
+                    else { tokens.push(comp[i]); i++; }
+                }
+                return tokens;
+            }
+            function countAtoms(comp) {
+                const tokens = tokenize(comp);
+                const counts = {};
+                let i = 0;
+                while (i < tokens.length) {
+                    const sym = tokens[i];
+                    let count = 1;
+                    if (i+1 < tokens.length && !isNaN(tokens[i+1])) { count = parseInt(tokens[i+1]); i++; }
+                    counts[sym] = (counts[sym] || 0) + count;
+                    i++;
+                }
+                return counts;
+            }
+            function canonicalFormula(comp) {
+                if (!comp) return '';
+                const counts = countAtoms(comp);
+                const sorted = Object.keys(counts).sort();
+                let result = '';
+                for (const sym of sorted) { result += sym; if (counts[sym] > 1) result += counts[sym]; }
+                return result;
+            }
+            function buildFormula(tokens) {
+                const counts = {};
+                let i = 0;
+                while (i < tokens.length) {
+                    const sym = tokens[i];
+                    let count = 1;
+                    if (i+1 < tokens.length && !isNaN(tokens[i+1])) { count = parseInt(tokens[i+1]); i++; }
+                    counts[sym] = (counts[sym] || 0) + count;
+                    i++;
+                }
+                let result = '';
+                const sorted = Object.keys(counts).sort();
+                for (const sym of sorted) { result += sym; if (counts[sym] > 1) result += counts[sym]; }
+                return result;
+            }
+            function isValidCompound(comp) {
+                if (!comp || comp.length < 2) return true;
+                const tokens = tokenize(comp);
+                const allMetals = tokens.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                if (allMetals && tokens.length >= 2) return true;
+                for (let j = 0; j < tokens.length - 1; j++) {
+                    if (tokens[j] === tokens[j+1]) {
+                        if (tokens[j] === 'O' && tokens.length === 2) continue;
+                        if (tokens[j] === 'N' && tokens.length === 2) continue;
+                        if (tokens[j] === 'H' && tokens.length === 2) continue;
+                        if (tokens[j] === 'C' && tokens.length === 2) continue;
+                        return false;
+                    }
+                }
+                let totalVal = 0, hasNonMetal = false;
+                for (const sym of tokens) {
+                    const d = elementData[sym];
+                    if (d && d.type !== 'металл' && d.type !== 'благородный газ') hasNonMetal = true;
+                    totalVal += (valenceMap[sym] || 0);
+                }
+                if (hasNonMetal && totalVal % 2 !== 0 && !tokens.includes('H')) {
+                    const hasTM = tokens.some(sym => { const d = elementData[sym]; return d && d.type === 'металл' && d.group.includes('Переходный'); });
+                    if (!hasTM) return false;
+                }
+                return true;
+            }
+            function tryMerge(comp1, comp2) {
+                const c1 = canonicalFormula(comp1), c2 = canonicalFormula(comp2);
+                if (c1 === c2) {
+                    const counts = countAtoms(comp1);
+                    let result = '';
+                    const sorted = Object.keys(counts).sort();
+                    for (const sym of sorted) { result += sym; const nc = counts[sym] * 2; if (nc > 1) result += nc; }
+                    return result;
+                }
+                const combined1 = comp1 + comp2, combined2 = comp2 + comp1;
+                const t1 = tokenize(combined1), t2 = tokenize(combined2);
+                const allMetals1 = t1.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                const allMetals2 = t2.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                if (allMetals1 && t1.length >= 2) return buildFormula(t1);
+                if (allMetals2 && t2.length >= 2) return buildFormula(t2);
+                if (isValidCompound(combined1)) return buildFormula(t1);
+                if (isValidCompound(combined2)) return buildFormula(t2);
+                return null;
+            }
+            function getSubstanceType(tokens, counts) {
+                const unique = Object.keys(counts);
+                const hasO = 'O' in counts, hasH = 'H' in counts, hasC = 'C' in counts;
+                const metals = unique.filter(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                const nonMetals = unique.filter(sym => { const d = elementData[sym]; return d && (d.type === 'неметалл' || d.type === 'галоген' || d.type === 'металлоид'); });
+                if (metals.length >= 2 && nonMetals.length === 0) return { type: 'сплав', class: 'alloy' };
+                if (unique.length === 1) {
+                    const d = elementData[unique[0]];
+                    if (d && d.type === 'благородный газ') return { type: 'благородный газ', class: 'inorganic' };
+                    if (d && d.type === 'металл') return { type: 'металл', class: 'inorganic' };
+                }
+                if (metals.length > 0 && nonMetals.length > 0) {
+                    if (metals.length >= 2 && nonMetals.length === 1) return { type: 'интерметаллид', class: 'alloy' };
+                    return { type: 'соль', class: 'salt' };
+                }
+                if (hasC && hasH) {
+                    if (unique.length <= 4) return { type: 'органическое', class: 'organic' };
+                    return { type: 'органическое (сложное)', class: 'organic' };
+                }
+                if (hasH && hasO && nonMetals.length >= 1) {
+                    const acid = nonMetals.find(s => s !== 'O' && s !== 'H');
+                    if (acid) return { type: 'кислота', class: 'acid' };
+                }
+                if (hasO && unique.length === 2) {
+                    const other = unique.find(s => s !== 'O');
+                    if (other) {
+                        const d = elementData[other];
+                        if (d && d.type === 'металл') return { type: 'основный оксид', class: 'oxide' };
+                        if (d && (d.type === 'неметалл' || d.type === 'металлоид')) return { type: 'кислотный оксид', class: 'oxide' };
+                        return { type: 'оксид', class: 'oxide' };
+                    }
+                }
+                if (hasH && unique.length === 2) {
+                    const other = unique.find(s => s !== 'H');
+                    if (other) {
+                        const d = elementData[other];
+                        if (d && d.type === 'металл') return { type: 'металлогидрид', class: 'hydride' };
+                        return { type: 'гидрид', class: 'hydride' };
+                    }
+                }
+                if ((hasCl || hasF) && unique.length === 2) return { type: 'галогенид', class: 'inorganic' };
+                if (unique.length >= 3 && !hasC) {
+                    const allMetals = unique.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                    if (allMetals) return { type: 'многокомпонентный сплав', class: 'alloy' };
+                    return { type: 'неорганическое (сложное)', class: 'inorganic' };
+                }
+                if (unique.length >= 5) return { type: 'многокомпонентное', class: 'mixture' };
+                return { type: 'химическое соединение', class: 'inorganic' };
+            }
+            function generateCompoundName(comp) {
+                if (!comp) return 'Неизвестный';
+                const tokens = tokenize(comp);
+                if (tokens.length === 0) return 'Пусто';
+                if (tokens.length === 1) { const d = elementData[tokens[0]]; return d ? d.rus : tokens[0]; }
+                const counts = countAtoms(comp);
+                const unique = Object.keys(counts);
+                const typeInfo = getSubstanceType(tokens, counts);
+                const metals = unique.filter(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                const nonMetals = unique.filter(sym => { const d = elementData[sym]; return d && (d.type === 'неметалл' || d.type === 'галоген' || d.type === 'металлоид'); });
+                if (typeInfo.type === 'сплав' || typeInfo.type === 'интерметаллид' || typeInfo.type === 'многокомпонентный сплав') {
+                    const names = metals.map(s => elementData[s]?.rus || s);
+                    return names.join('-') + ' сплав';
+                }
+                if (typeInfo.type === 'благородный газ' || typeInfo.type === 'металл') {
+                    return elementData[unique[0]]?.rus || unique[0];
+                }
+                if (typeInfo.type === 'оксид' || typeInfo.type === 'основный оксид' || typeInfo.type === 'кислотный оксид') {
+                    const other = unique.find(s => s !== 'O');
+                    if (other) {
+                        const oname = elementData[other]?.rus || other;
+                        const oCount = counts['O'] || 0;
+                        const prefixMap = { '1':'моно','2':'ди','3':'три','4':'тетра','5':'пента','6':'гекса' };
+                        const ox = prefixMap[oCount] || '';
+                        return (prefixMap[counts[other]] || '') + oname + ' ' + ox + 'оксид';
+                    }
+                }
+                if (typeInfo.type === 'кислота') {
+                    const acid = nonMetals.find(s => s !== 'O' && s !== 'H');
+                    if (acid) {
+                        const map = { 'S':'Серная','N':'Азотная','Cl':'Хлорная','C':'Угольная','P':'Фосфорная','Si':'Кремниевая' };
+                        return (map[acid] || (elementData[acid]?.rus || acid) + 'ная') + ' кислота';
+                    }
+                }
+                if (typeInfo.type === 'соль') {
+                    if (metals.length > 0 && nonMetals.length > 0) {
+                        const mname = elementData[metals[0]]?.rus || metals[0];
+                        const nm = nonMetals[0];
+                        const suf = { 'Cl':'хлорид','F':'фторид','O':'оксид','S':'сульфид','N':'нитрид','C':'карбид' };
+                        const suffix = suf[nm] || (elementData[nm]?.rus || nm) + 'ид';
+                        const p = { '1':'','2':'ди','3':'три','4':'тетра','5':'пента' };
+                        return suffix + ' ' + (p[counts[metals[0]]] || '') + mname;
+                    }
+                }
+                if (typeInfo.type === 'гидрид' || typeInfo.type === 'металлогидрид') {
+                    const other = unique.find(s => s !== 'H');
+                    if (other) {
+                        const oname = elementData[other]?.rus || other;
+                        const p = { '1':'','2':'ди','3':'три','4':'тетра' };
+                        return (p[counts['H']] || '') + 'гидрид ' + oname;
+                    }
+                }
+                if (typeInfo.type === 'галогенид') {
+                    const other = unique.find(s => s !== 'Cl' && s !== 'F' && s !== 'Br' && s !== 'I');
+                    if (other) {
+                        const oname = elementData[other]?.rus || other;
+                        let hal = '';
+                        if (hasCl) hal = 'хлорид'; else if (hasF) hal = 'фторид'; else if (hasBr) hal = 'бромид'; else if (hasI) hal = 'иодид';
+                        const p = { '1':'','2':'ди','3':'три','4':'тетра' };
+                        return (p[counts[hasCl?'Cl':hasF?'F':hasBr?'Br':'I']] || '') + hal + ' ' + oname;
+                    }
+                }
+                if (typeInfo.type === 'органическое' || typeInfo.type === 'органическое (сложное)') {
+                    const c = counts['C'] || 0, h = counts['H'] || 0;
+                    if (c === 1 && h >= 4 && !hasO) return 'Метан';
+                    if (c === 1 && h >= 4 && hasO) return 'Метанол';
+                    if (c === 2 && h >= 6 && !hasO) return 'Этан';
+                    if (c === 2 && h >= 6 && hasO) return 'Этанол';
+                    if (c === 3 && h >= 8 && !hasO) return 'Пропан';
+                    if (c === 3 && h >= 8 && hasO) return 'Пропанол';
+                    if (c === 6 && h >= 12) {
+                        if (hasO && h === 12) return 'Фенол';
+                        if (!hasO && h === 6) return 'Бензол';
+                        return 'Циклогексан';
+                    }
+                    if (c >= 4 && !hasO) {
+                        const pref = ['','Мет','Эт','Проп','Бут','Пент','Гекс','Гепт','Окт','Нон','Дек'];
+                        const p = c < pref.length ? pref[c] : `C${c}`;
+                        if (h === c * 2 + 2) return p + 'ан';
+                        if (h === c * 2) return p + 'ен';
+                        if (h === c * 2 - 2) return p + 'ин';
+                        return `Углеводород C${c}H${h}`;
+                    }
+                    const parts = unique.map(s => (elementData[s]?.rus || s) + (counts[s] > 1 ? `(${counts[s]})` : ''));
+                    return `Органическое: ${parts.join('+')}`;
+                }
+                const parts = unique.map(s => (elementData[s]?.rus || s) + (counts[s] > 1 ? `(${counts[s]})` : ''));
+                return parts.join(' + ');
+            }
+
+            function applyCoefficient(comp, coeff, side) {
+                const tokens = tokenize(comp);
+                const counts = {};
+                let i = 0;
+                while (i < tokens.length) {
+                    const sym = tokens[i];
+                    let count = 1;
+                    if (i+1 < tokens.length && !isNaN(tokens[i+1])) { count = parseInt(tokens[i+1]); i++; }
+                    counts[sym] = (counts[sym] || 0) + count;
+                    i++;
+                }
+                if (side === 'left') return `${coeff}${comp}`;
+                let result = '';
+                const sorted = Object.keys(counts).sort();
+                for (const sym of sorted) {
+                    result += sym;
+                    const nc = counts[sym] * coeff;
+                    if (nc > 1) result += nc;
+                }
+                return result;
+            }
+
+            // ---- DOM ----
+            const workspace = document.getElementById('workspace');
+            const grid = document.getElementById('periodicGrid');
+            const coeffGrid = document.getElementById('coefficientGrid');
+            const clearBtn = document.getElementById('clearBtn');
+            const compoundCountEl = document.getElementById('compoundCount');
+            let chemObjects = [];
+
+            // ---- ЗАПОЛНЯЕМ ТАБЛИЦУ ----
+            const positions = {};
+            elementsData.forEach(el => { positions[el.period + '-' + el.groupNum] = el; });
+            for (let p = 1; p <= 7; p++) {
+                for (let g = 1; g <= 18; g++) {
+                    const el = positions[p + '-' + g];
+                    const cell = document.createElement('div');
+                    cell.className = 'element-cell';
+                    if (el) {
+                        cell.classList.add(el.color);
+                        cell.innerHTML = `<span class="el-number">${el.num}</span><span class="el-symbol">${el.sym}</span><span class="el-name">${el.name}</span>`;
+                        cell.dataset.symbol = el.sym;
+                    } else {
+                        cell.style.background = 'transparent'; cell.style.boxShadow = 'none'; cell.style.cursor = 'default'; cell.style.pointerEvents = 'none';
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+
+            // ---- КОЭФФИЦИЕНТЫ ----
+            for (let i = 1; i <= 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'coeff-cell';
+                cell.textContent = i;
+                cell.dataset.value = i;
+                coeffGrid.appendChild(cell);
+            }
+
+            // ---- СОЗДАНИЕ ОБЪЕКТА ----
+            function createChemObject(symbol, x, y, comp) {
+                const el = document.createElement('div');
+                el.className = 'chem-object';
+                const composition = comp || symbol;
+                const display = composition.length > 15 ? composition.substring(0, 12) + '…' : composition;
+                el.textContent = display;
+                el.dataset.symbol = symbol;
+                el.dataset.composition = composition;
+                el.dataset.fullComposition = composition;
+
+                const tokens = tokenize(composition);
+                const unique = new Set(tokens);
+                const allMetals = tokens.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                if (allMetals && tokens.length >= 2) el.classList.add('alloy');
+                else if (unique.size >= 6) el.classList.add('mega-compound');
+                else if (composition.length > 2) el.classList.add('compound');
+
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                workspace.appendChild(el);
+                chemObjects.push(el);
+                attachDragEvents(el);
+                updateStats();
+                return el;
+            }
+
+            function createCoefficient(value, x, y) {
+                const el = document.createElement('div');
+                el.className = 'chem-object coefficient';
+                el.textContent = value;
+                el.dataset.coefficient = value;
+                el.dataset.type = 'coefficient';
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                workspace.appendChild(el);
+                chemObjects.push(el);
+                attachDragEvents(el);
+                return el;
+            }
+
+            function updateStats() {
+                const compounds = chemObjects.filter(el => {
+                    if (el.dataset.type === 'coefficient') return false;
+                    const comp = el.dataset.composition || '';
+                    return comp.length > 1;
+                });
+                compoundCountEl.textContent = compounds.length;
+            }
+
+            function removeObject(el) {
+                const idx = chemObjects.indexOf(el);
+                if (idx !== -1) chemObjects.splice(idx, 1);
+                if (el.parentNode) el.parentNode.removeChild(el);
+                updateStats();
+            }
+
+            function pushAway(el) {
+                const elRect = el.getBoundingClientRect();
+                const wsRect = workspace.getBoundingClientRect();
+                const cx = elRect.left + elRect.width/2, cy = elRect.top + elRect.height/2;
+                let dx = 0, dy = 0;
+                for (let other of chemObjects) {
+                    if (other === el) continue;
+                    const or = other.getBoundingClientRect();
+                    const ocx = or.left + or.width/2, ocy = or.top + or.height/2;
+                    const ddx = ocx - cx, ddy = ocy - cy;
+                    const dist = Math.sqrt(ddx*ddx + ddy*ddy);
+                    if (dist < 120 && dist > 1) {
+                        const force = (120 - dist) / 120 * 2;
+                        dx -= Math.cos(Math.atan2(ddy, ddx)) * force;
+                        dy -= Math.sin(Math.atan2(ddy, ddx)) * force;
+                    }
+                }
+                if (dx !== 0 || dy !== 0) {
+                    let nx = (parseFloat(el.style.left) || 0) + dx * 12;
+                    let ny = (parseFloat(el.style.top) || 0) + dy * 12;
+                    nx = Math.max(0, Math.min(wsRect.width - el.offsetWidth, nx));
+                    ny = Math.max(0, Math.min(wsRect.height - el.offsetHeight, ny));
+                    el.style.left = nx + 'px';
+                    el.style.top = ny + 'px';
+                }
+            }
+
+            function checkAndMerge(draggedEl) {
+                if (draggedEl.dataset.type === 'coefficient') {
+                    const coeff = parseInt(draggedEl.dataset.coefficient);
+                    const dragRect = draggedEl.getBoundingClientRect();
+                    const dragCenterX = (dragRect.left + dragRect.right)/2;
+                    let targetFound = false;
+                    for (let other of chemObjects) {
+                        if (other === draggedEl || other.dataset.type === 'coefficient') continue;
+                        const or = other.getBoundingClientRect();
+                        const overlap = !(dragRect.right < or.left || dragRect.left > or.right || dragRect.bottom < or.top || dragRect.top > or.bottom);
+                        if (!overlap) continue;
+                        const otherCenterX = (or.left + or.right)/2;
+                        const side = dragCenterX < otherCenterX ? 'left' : 'right';
+                        const comp = other.dataset.composition || other.dataset.symbol;
+                        const newComp = applyCoefficient(comp, coeff, side);
+                        if (isValidCompound(newComp) || newComp.length === comp.length + 1) {
+                            const wsRect = workspace.getBoundingClientRect();
+                            const nx = Math.max(0, Math.min(wsRect.width - 60, (or.left + or.right)/2 - 30 - wsRect.left));
+                            const ny = Math.max(0, Math.min(wsRect.height - 30, (or.top + or.bottom)/2 - 15 - wsRect.top));
+                            removeObject(draggedEl);
+                            removeObject(other);
+                            const first = newComp[0] || '?';
+                            const ne = createChemObject(first, nx, ny, newComp);
+                            const tokens = tokenize(newComp);
+                            let maxV = 0;
+                            for (const s of tokens) { const v = valenceMap[s] || 0; if (v > maxV) maxV = v; }
+                            valenceMap[newComp] = maxV;
+                            targetFound = true;
+                            break;
+                        }
+                    }
+                    if (!targetFound && draggedEl.parentNode) {
+                        draggedEl.classList.add('reject');
+                        pushAway(draggedEl);
+                        setTimeout(() => { if (draggedEl.parentNode) draggedEl.classList.remove('reject'); }, 1500);
+                    }
+                    return;
+                }
+
+                const dragRect = draggedEl.getBoundingClientRect();
+                const dragComp = draggedEl.dataset.composition || draggedEl.dataset.symbol;
+                let merged = false;
+                for (let other of chemObjects) {
+                    if (other === draggedEl || other.dataset.type === 'coefficient') continue;
+                    const or = other.getBoundingClientRect();
+                    const overlap = !(dragRect.right < or.left || dragRect.left > or.right || dragRect.bottom < or.top || dragRect.top > or.bottom);
+                    if (!overlap) continue;
+                    const otherComp = other.dataset.composition || other.dataset.symbol;
+                    const newComp = tryMerge(dragComp, otherComp);
+                    if (newComp) {
+                        const wsRect = workspace.getBoundingClientRect();
+                        const nx = Math.max(0, Math.min(wsRect.width - 60, (dragRect.left + dragRect.right)/2 - 30 - wsRect.left));
+                        const ny = Math.max(0, Math.min(wsRect.height - 30, (dragRect.top + dragRect.bottom)/2 - 15 - wsRect.top));
+                        removeObject(draggedEl);
+                        removeObject(other);
+                        const first = newComp[0] || '?';
+                        const ne = createChemObject(first, nx, ny, newComp);
+                        const tokens = tokenize(newComp);
+                        let maxV = 0;
+                        for (const s of tokens) { const v = valenceMap[s] || 0; if (v > maxV) maxV = v; }
+                        valenceMap[newComp] = maxV;
+                        merged = true;
+                        break;
+                    }
+                }
+                if (!merged && draggedEl.parentNode) {
+                    draggedEl.classList.add('reject');
+                    pushAway(draggedEl);
+                    setTimeout(() => { if (draggedEl.parentNode) draggedEl.classList.remove('reject'); }, 1500);
+                }
+                return merged;
+            }
+
+            // ---- ПЕРЕТАСКИВАНИЕ (touch + mouse) ----
+            function attachDragEvents(el) {
+                let isDragging = false, startX, startY, origX, origY;
+
+                const onStart = (e) => {
+                    e.preventDefault();
+                    const ev = e.touches ? e.touches[0] : e;
+                    isDragging = true;
+                    el.classList.add('dragging');
+                    const rect = el.getBoundingClientRect();
+                    origX = rect.left; origY = rect.top;
+                    startX = ev.clientX; startY = ev.clientY;
+                    el.style.zIndex = 100;
+                    el.classList.remove('reject');
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onEnd);
+                    document.addEventListener('touchmove', onMove, { passive: false });
+                    document.addEventListener('touchend', onEnd, { passive: false });
+                };
+
+                const onMove = (e) => {
+                    e.preventDefault();
+                    if (!isDragging) return;
+                    const ev = e.touches ? e.touches[0] : e;
+                    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+                    const wsRect = workspace.getBoundingClientRect();
+                    let nx = origX + dx - wsRect.left, ny = origY + dy - wsRect.top;
+                    nx = Math.max(0, Math.min(wsRect.width - el.offsetWidth, nx));
+                    ny = Math.max(0, Math.min(wsRect.height - el.offsetHeight, ny));
+                    el.style.left = nx + 'px';
+                    el.style.top = ny + 'px';
+                };
+
+                const onEnd = (e) => {
+                    if (isDragging) {
+                        isDragging = false;
+                        el.classList.remove('dragging');
+                        el.style.zIndex = 20;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onEnd);
+                        document.removeEventListener('touchmove', onMove);
+                        document.removeEventListener('touchend', onEnd);
+                        checkAndMerge(el);
+                    }
+                };
+
+                el.addEventListener('mousedown', onStart);
+                el.addEventListener('touchstart', onStart, { passive: false });
+            }
+
+            // ---- КЛИКИ: СОЗДАНИЕ ----
+            grid.addEventListener('click', (e) => {
+                const cell = e.target.closest('.element-cell[data-symbol]');
+                if (!cell) return;
+                const sym = cell.dataset.symbol;
+                const wsRect = workspace.getBoundingClientRect();
+                const x = 20 + Math.random() * (wsRect.width - 60);
+                const y = 20 + Math.random() * (wsRect.height - 60);
+                createChemObject(sym, x, y, sym);
+            });
+            grid.addEventListener('touchstart', (e) => {
+                const cell = e.target.closest('.element-cell[data-symbol]');
+                if (!cell) return;
+                const sym = cell.dataset.symbol;
+                const wsRect = workspace.getBoundingClientRect();
+                const x = 20 + Math.random() * (wsRect.width - 60);
+                const y = 20 + Math.random() * (wsRect.height - 60);
+                createChemObject(sym, x, y, sym);
+            }, { passive: true });
+
+            coeffGrid.addEventListener('click', (e) => {
+                const cell = e.target.closest('.coeff-cell');
+                if (!cell) return;
+                const val = parseInt(cell.dataset.value);
+                const wsRect = workspace.getBoundingClientRect();
+                const x = 20 + Math.random() * (wsRect.width - 60);
+                const y = 20 + Math.random() * (wsRect.height - 60);
+                createCoefficient(val, x, y);
+            });
+            coeffGrid.addEventListener('touchstart', (e) => {
+                const cell = e.target.closest('.coeff-cell');
+                if (!cell) return;
+                const val = parseInt(cell.dataset.value);
+                const wsRect = workspace.getBoundingClientRect();
+                const x = 20 + Math.random() * (wsRect.width - 60);
+                const y = 20 + Math.random() * (wsRect.height - 60);
+                createCoefficient(val, x, y);
+            }, { passive: true });
+
+            clearBtn.addEventListener('click', () => {
+                for (let i = chemObjects.length - 1; i >= 0; i--) {
+                    const el = chemObjects[i];
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                }
+                chemObjects = [];
+                for (const key in valenceMap) { if (key.length > 2) delete valenceMap[key]; }
+                updateStats();
+            });
+
+            // ---- ДЕМО ----
+            function initDemo() {
+                const wsRect = workspace.getBoundingClientRect();
+                const demo = ['H','O','C','N','Cl','Fe','Mg','Cu','Al','Ti'];
+                const pos = [
+                    {x:40,y:40},{x:100,y:40},{x:160,y:40},{x:220,y:40},{x:280,y:40},
+                    {x:40,y:100},{x:100,y:100},{x:160,y:100},{x:220,y:100},{x:280,y:100}
+                ];
+                demo.forEach((s,i) => { const p = pos[i] || {x:50+i*30,y:50+i*20}; createChemObject(s, p.x, p.y, s); });
+                setTimeout(() => {
+                    const compounds = [
+                        { comp: 'FeMg', label: 'Fe-Mg' }, { comp: 'CuAl', label: 'Cu-Al' },
+                        { comp: 'H2O', label: 'H₂O' }, { comp: 'NaCl', label: 'NaCl' },
+                        { comp: 'C2H5OH', label: 'C₂H₅OH' }, { comp: 'H2SO4', label: 'H₂SO₄' },
+                        { comp: 'Fe2O3', label: 'Fe₂O₃' }
+                    ];
+                    compounds.forEach((c, i) => {
+                        const x = 30 + i * 95;
+                        const y = 220;
+                        const el = createChemObject(c.comp[0], x, y, c.comp);
+                        el.textContent = c.label;
+                        const tokens = tokenize(c.comp);
+                        const allMetals = tokens.every(sym => { const d = elementData[sym]; return d && d.type === 'металл'; });
+                        if (allMetals && tokens.length >= 2) el.classList.add('alloy');
+                        else el.classList.add('compound');
+                    });
+                }, 300);
+            }
+            setTimeout(initDemo, 200);
+        })();
+    </script>
+</body>
+</html>
