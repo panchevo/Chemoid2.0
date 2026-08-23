@@ -1,2 +1,2 @@
-# Chemoid_android
+Chemoid
 Molecule designer
